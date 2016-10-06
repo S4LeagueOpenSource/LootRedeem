@@ -15,7 +15,7 @@ var configFilePath = './' + configFileName
 // S4 League
 var gameName = 'S4 League'
 var gameNameRest = 's4lus'
-var eventId = 410
+var eventId = 423
 
 // Shaiya
 //var gameName = 'Shaiya'
