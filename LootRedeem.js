@@ -12,20 +12,81 @@ var request = require('request').defaults({ jar: true })
 var configFileName = 'config.ini'
 var configFilePath = './' + configFileName
 
-// S4 League
-var gameName = 'S4 League'
-var gameNameRest = 's4lus'
-var eventId = 410
+var gameEventUrl = ''
+var gameName = ''
+var gameNameRest = ''
 
-// Shaiya
-//var gameName = 'Shaiya'
-//var gameNameRest = 'syus'
-//var eventId = 357
+var games = [
+	{
+		name: 'Aura Kingdom',
+		key: 'arkus',
+		eventUrl: 'http://aurakingdom.aeriagames.com/freerewards/get-event/ark'
+	},
+	/*
+	{
+		name: 'A.V.A.',
+		key: 'avus',
+		eventUrl: '???'
+	},
+	*/
+	{
+		name: 'Eden Eternal',
+		key: 'eeus',
+		eventUrl: 'http://edeneternal.aeriagames.com/freerewards/get-event/ee'
+	},
+	{
+		name: 'Grand Fantasia',
+		key: 'gfus',
+		eventUrl: 'http://grandfantasia.aeriagames.com/freerewards/get-event/gf'
+	},
+	/*
+	{
+		name: 'Scarlet Blade',
+		key: 'sbus',
+		eventUrl: '???'
+	},
+	*/
+	{
+		name: 'Shaiya',
+		key: 'syus',
+		eventUrl: 'http://shaiya.aeriagames.com/freerewards/get-event/sy'
+	},
+	/*
+	{
+		name: 'Soldier Front',
+		key: 'sfus',
+		eventUrl: '???'
+	},
+	*/
+	{
+		name: 'S4 League',
+		key: 's4lus',
+		eventUrl: 'http://s4league.aeriagames.com/freerewards/get-event/s4l'
+	},
+	{
+		name: 'Wolf Team',
+		key: 'wtus',
+		eventUrl: 'http://wolfteam.aeriagames.com/freerewards/get-event/wt'
+	}
+]
 
 function init() {
-	console.log('Starting LootRedeem for ' + gameName + '...')
+	console.log('Starting LootRedeem...')
+	printSupportedGames()
+	setGame(4)
 	ensureConfigExists()
 	main()
+}
+
+function printSupportedGames() {
+	var supportedGames = 'Supported Games: '
+	for (var i = 0; i < games.length; i++) {
+		if(i !== 0) {
+			supportedGames += ', '
+		}
+		supportedGames += games[i].name
+	}
+	console.log(supportedGames)
 }
 
 function ensureConfigExists() {
@@ -46,7 +107,8 @@ function main() {
 	console.log('[1] Redeem')
 	console.log('[2] Auto Redeem')
 	console.log('[3] Accounts')
-	console.log('[4] Exit')
+	console.log('[4] Change Game [' + gameName + ']')
+	console.log('[5] Exit')
 
 	prompt.start()
 	prompt.get(['option'], function (err, result) {
@@ -62,6 +124,8 @@ function main() {
 		} else if(result.option === '3') {
 			manageAccounts()
 		} else if(result.option === '4') {
+			changeGame()
+		} else if(result.option === '5') {
 			process.exit()
 		} else {
 			console.log('Invalid Option.')
@@ -231,6 +295,32 @@ function redeemAccount(username, password, cb) {
 		},
 		function(accessToken, cb) {
 			request.post({
+				url: gameEventUrl,
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:49.0) Gecko/20100101 Firefox/49.0',
+					'Referer': 'http://s4league.aeriagames.com/itemmall/free-rewards',
+					'X-Requested-With': 'XMLHttpRequest',
+					'X-Request': 'JSON'
+				},
+				gzip: true
+			},
+			function(err, response, body) {
+				if(err) {
+					return cb(err, null)
+				}
+
+				if(response.statusCode !== 200) {
+					return cb('[ERROR] Failed to retrieve the Event ID.', false)
+				}
+
+				var result = JSON.parse(body)
+				var eventId = result.event_id
+
+				return cb(null, eventId, accessToken)
+			})
+		},
+		function(eventId, accessToken, cb) {
+			request.post({
 				url: 'https://www.aeriagames.com/weblet/lootbox/' + gameNameRest + '/rest/play/' + eventId + '?access_token=' + accessToken,
 				headers: {
 					'User-Agent': 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.2; WOW64; Trident/7.0; .NET4.0C; .NET4.0E; .NET CLR 2.0.50727; .NET CLR 3.0.30729; .NET CLR 3.5.30729); Ignite/Windows 1.13.3296'
@@ -251,19 +341,19 @@ function redeemAccount(username, password, cb) {
 						return cb('[ERROR] Event doesn\'t exist.', false)
 					} else if(result.error_code === 201) {
 						console.log('[ERROR] You already redeemed. Please wait longer!')
-						return cb(result.message, accessToken)
+						return cb(result.message, eventId, accessToken)
 					} else {
 						return cb('[ERROR] Unknown Error Code: ' + result.error_code, false)
 					}
 				} else if(result.is_successful) {
-					return cb(false, accessToken)
+					return cb(false, eventId, accessToken)
 				} else {
 					console.log('[ERROR] Unknown response:')
 					return cb(result, false)
 				}
 			})
 		},
-		function(accessToken, cb) {
+		function(eventId, accessToken, cb) {
 			request.post({
 				url: 'https://www.aeriagames.com/weblet/lootbox/' + gameNameRest + '/rest/redeem/' + eventId + '?access_token=' + accessToken,
 				headers: {
@@ -281,7 +371,7 @@ function redeemAccount(username, password, cb) {
 				if(result.error_code) {
 					if(result.error_code === 108) {
 						console.log('[ERROR] Nothing to redeem.')
-						return cb(result.message, accessToken)
+						return cb(result.message, eventId, accessToken)
 					} else {
 						return cb('[ERROR] Unknown Error Code: ' + result.error_code, false)
 					}
@@ -294,7 +384,7 @@ function redeemAccount(username, password, cb) {
 				}
 			})
 		}
-	], function(err, accessToken) {
+	], function(err, eventId, accessToken) {
 		if(err) {
 			console.log(err)
 		}
@@ -447,7 +537,7 @@ function deleteAccount() {
 
 		var index = parseInt(result.option) - 1
 
-		if(accountsArray.length < index) {
+		if(accountsArray.length < index || index === -1) {
 			console.log('Invalid Number!')
 			deleteAccount()
 			return
@@ -462,7 +552,57 @@ function deleteAccount() {
 	})
 }
 
+function changeGame() {
+	console.log('#######################')
+	console.log('##### CHANGE GAME #####')
+	console.log('#######################')
 
+	for (var i = 0; i < games.length; i++) {
+		console.log('[' + (i + 1) + '] ' + games[i].name)
+	}
+
+	var exitNumber = games.length + 1
+
+	console.log('[' + exitNumber + '] Back to Main Menu')
+
+	prompt.start()
+	prompt.get(['option'], function (err, result) {
+		prompt.pause()
+		if(err) {
+			return
+		}
+
+		if(result.option === exitNumber + '') {
+			main()
+			return
+		}
+
+		var index = parseInt(result.option) - 1
+
+		if((games.length - 1) < index || index === -1) {
+			console.log('Invalid Number!')
+			changeGame()
+			return
+		}
+
+		setGame(index)
+
+		main()
+	})
+}
+
+function setGame(index) {
+	for (var i = 0; i < games.length; i++) {
+		if(i === index) {
+			gameEventUrl = games[i].eventUrl
+			gameName = games[i].name
+			gameNameRest = games[i].key
+
+			console.log('Changed Game to ' + gameName)
+			return
+		}
+	}
+}
 
 function secondsToHms(d) {
 	d = Number(d)
